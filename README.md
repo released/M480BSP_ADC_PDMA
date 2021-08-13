@@ -1,6 +1,16 @@
 # M480BSP_ADC_PDMA
  M480BSP_ADC_PDMA
 
+
+update @ 2021/08/13
+
+1. add define USE_ADC_CH0_3 , USE_ADC_CH7_10 , for different ADC channel
+	
+	USE_ADC_CH0_3 : PB0 ~ PB3
+	
+	USE_ADC_CH7_10 : PB7 ~ PB10
+
+
 update @ 2020/06/10
 
 1. Get ADC (PB7 ,PB8 ,PB9 ,PB10 ) with IRQ , and transfer with PDMA , 
