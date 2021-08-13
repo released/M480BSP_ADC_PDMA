@@ -19,6 +19,9 @@
 #define ADC_PDMA_OPENED_CH   			(1 << ADC_PDMA_CH)
 #define ADC_DMA_SAMPLE_COUNT 		(4)
 
+#define USE_ADC_CH0_3
+//#define USE_ADC_CH7_10
+
 uint16_t aADCxConvertedData[ADC_DMA_SAMPLE_COUNT] = {0};
 uint16_t pdmaConvertedData[ADC_DMA_SAMPLE_COUNT] = {0};
 
@@ -62,7 +65,7 @@ typedef enum{
 	flag_ADC_Data_Ready ,	
 	flag_ADC_Sensor_Ready ,
 	
-	flag_Trans_Data_Ready ,
+	flag_PDMA_Trans_Data_Ready ,
 	
 	flag_DEFAULT	
 }Flag_Index;
@@ -107,7 +110,7 @@ void PDMA_IRQHandler(void)
         if(PDMA_GET_TD_STS(PDMA) & ADC_PDMA_OPENED_CH)
         {
 			//insert process
-			set_flag(flag_Trans_Data_Ready , ENABLE);
+			set_flag(flag_PDMA_Trans_Data_Ready , ENABLE);
 			LED_G ^= 1;
 			
 //			printf("TDIF\r\n");
@@ -167,7 +170,7 @@ void EADC00_IRQHandler(void)
 
 void EADC01_IRQHandler(void)
 {
-//    set_flag(flag_ADC_Data_Ready , ENABLE);
+    set_flag(flag_ADC_Data_Ready , ENABLE);
     EADC_CLR_INT_FLAG(EADC, EADC_STATUS2_ADIF1_Msk);
 }
 
@@ -215,18 +218,23 @@ void ADC_Convert_Ext_Channel(void)
 
 	uint8_t SampleCount = 0;
 	uint8_t ModuleCount = 0;
+
+	#if defined (USE_ADC_CH0_3)
+	uint8_t ModuleNum = ADC0_CH0;
+	#elif defined (USE_ADC_CH7_10)
 	uint8_t ModuleNum = ADC0_CH7;
+	#endif
 	
-	set_flag(flag_Trans_Data_Ready , DISABLE);	
+	set_flag(flag_PDMA_Trans_Data_Ready , DISABLE);	
 	set_flag(flag_ADC_Data_Ready , DISABLE);
 	
     /* Set input mode as single-end, and Single mode*/
     EADC_Open(EADC, EADC_CTL_DIFFEN_SINGLE_END);
 
-	EADC_ConfigSampleModule(EADC, ModuleNum, EADC_SOFTWARE_TRIGGER, ADC0_CH7);
-	EADC_ConfigSampleModule(EADC, ModuleNum+1, EADC_ADINT0_TRIGGER, ADC0_CH8);
-	EADC_ConfigSampleModule(EADC, ModuleNum+2, EADC_ADINT0_TRIGGER, ADC0_CH9);
-	EADC_ConfigSampleModule(EADC, ModuleNum+3, EADC_ADINT0_TRIGGER, ADC0_CH10);
+	EADC_ConfigSampleModule(EADC, ModuleNum, EADC_SOFTWARE_TRIGGER, ModuleNum);
+	EADC_ConfigSampleModule(EADC, ModuleNum+1, EADC_ADINT0_TRIGGER, ModuleNum+1);
+	EADC_ConfigSampleModule(EADC, ModuleNum+2, EADC_ADINT0_TRIGGER, ModuleNum+2);
+	EADC_ConfigSampleModule(EADC, ModuleNum+3, EADC_ADINT0_TRIGGER, ModuleNum+3);
 
     EADC_CLR_INT_FLAG(EADC, EADC_STATUS2_ADIF0_Msk);
     EADC_ENABLE_INT(EADC, BIT0);
@@ -236,21 +244,21 @@ void ADC_Convert_Ext_Channel(void)
     EADC_ENABLE_INT(EADC, BIT1);
     EADC_ENABLE_SAMPLE_MODULE_INT(EADC, 1, (BIT0 << (ModuleNum+3)));
 
-    NVIC_EnableIRQ(EADC00_IRQn);
+//    NVIC_EnableIRQ(EADC00_IRQn);
     NVIC_EnableIRQ(EADC01_IRQn);
 	
 	PDMA_Init();
 
-    EADC_START_CONV(EADC, (BIT0 << ADC0_CH7));
+    EADC_START_CONV(EADC, (BIT0 << ModuleNum));
 //	while(is_flag_set(flag_ADC_Data_Ready) == DISABLE);
 
-	for (ModuleCount = ADC0_CH7 , SampleCount = 0; ModuleCount < (ADC0_CH7 + ADC_DMA_SAMPLE_COUNT) ; ModuleCount++, SampleCount++)
+	for (ModuleCount = ModuleNum , SampleCount = 0; ModuleCount < (ModuleNum + ADC_DMA_SAMPLE_COUNT) ; ModuleCount++, SampleCount++)
 	{
 		aADCxConvertedData[SampleCount] = EADC_GET_CONV_DATA(EADC, ModuleCount);
 	}
 
 
-//    while(is_flag_set(flag_Trans_Data_Ready) == DISABLE);
+//    while(is_flag_set(flag_PDMA_Trans_Data_Ready) == DISABLE);
 	for (i = 0 ; i < ADC_DMA_SAMPLE_COUNT; i++)
 	{
 		printf("0x%3X,0x%3X,|" , aADCxConvertedData[i],pdmaConvertedData[i] );
@@ -362,6 +370,16 @@ void SYS_Init(void)
     SYS->GPB_MFPH &= ~(SYS_GPB_MFPH_PB12MFP_Msk | SYS_GPB_MFPH_PB13MFP_Msk);
     SYS->GPB_MFPH |= (SYS_GPB_MFPH_PB12MFP_UART0_RXD | SYS_GPB_MFPH_PB13MFP_UART0_TXD);
 
+	#if defined (USE_ADC_CH0_3)
+    PB->MODE &= ~(GPIO_MODE_MODE0_Msk | GPIO_MODE_MODE1_Msk | GPIO_MODE_MODE2_Msk | GPIO_MODE_MODE3_Msk);
+
+    SYS->GPB_MFPL &= ~(SYS_GPB_MFPL_PB0MFP_Msk | SYS_GPB_MFPL_PB1MFP_Msk | SYS_GPB_MFPL_PB2MFP_Msk| SYS_GPB_MFPL_PB3MFP_Msk);
+    SYS->GPB_MFPL |= (SYS_GPB_MFPL_PB0MFP_EADC0_CH0 | SYS_GPB_MFPL_PB1MFP_EADC0_CH1 | SYS_GPB_MFPL_PB2MFP_EADC0_CH2| SYS_GPB_MFPL_PB3MFP_EADC0_CH3);
+
+    /* Disable the GPB0 - GPB3 digital input path to avoid the leakage current. */
+    GPIO_DISABLE_DIGITAL_PATH(PB, BIT0|BIT1|BIT2|BIT3);
+	
+	#elif defined (USE_ADC_CH7_10)
     PB->MODE &= ~(GPIO_MODE_MODE7_Msk | GPIO_MODE_MODE8_Msk | GPIO_MODE_MODE9_Msk | GPIO_MODE_MODE10_Msk);
 
     SYS->GPB_MFPL &= ~(SYS_GPB_MFPL_PB7MFP_Msk );
@@ -372,6 +390,7 @@ void SYS_Init(void)
 
     /* Disable the GPB0 - GPB3 digital input path to avoid the leakage current. */
     GPIO_DISABLE_DIGITAL_PATH(PB, BIT10|BIT9|BIT8|BIT7);
+	#endif
 
     /* Enable temperature sensor */
     SYS->IVSCTL |= SYS_IVSCTL_VTEMPEN_Msk;
@@ -407,8 +426,7 @@ int main()
 
 	LED_Init();
 	TIMER1_Init();
-
-
+	
     /* Got no where to go, just loop forever */
     while(1)
     {
