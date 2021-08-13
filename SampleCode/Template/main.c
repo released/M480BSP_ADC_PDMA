@@ -244,7 +244,7 @@ void ADC_Convert_Ext_Channel(void)
     EADC_ENABLE_INT(EADC, BIT1);
     EADC_ENABLE_SAMPLE_MODULE_INT(EADC, 1, (BIT0 << (ModuleNum+3)));
 
-//    NVIC_EnableIRQ(EADC00_IRQn);
+    NVIC_EnableIRQ(EADC00_IRQn);
     NVIC_EnableIRQ(EADC01_IRQn);
 	
 	PDMA_Init();
